@@ -1,80 +1,41 @@
+from django.urls import re_path
 from django.shortcuts import HttpResponse
+
 from stark.service.version1 import site
+from stark.service.version1 import StarkHandler
 
 from app01 import models
 
 
-class DeaprtmentHandler:
-    def __init__(self, model_class):
-        self.model_class = model_class
+class DeaprtmentHandler(StarkHandler):
 
-    def list_view(self, request):
+    def extra_urls(self):
         """
-        列表页面
-        :param request:
+        额外的增加URL
         :return:
         """
-        return HttpResponse('部门列表页面')
+        return [
+            re_path(r'^detail/(\d+)/$', self.detail_view)
+        ]
 
-    def add_view(self, request):
+    def detail_view(self, request, pk):
+        return HttpResponse('详细页面')
+
+
+class UserInfoHandler(StarkHandler):
+
+    def get_urls(self):
         """
-        添加页面
-        :param request:
+        修改所有的URL
         :return:
         """
-
-    def edit_view(self, request, pk):
-        """
-        编辑页面
-        :param request:
-        :param pk:
-        :return:
-        """
-
-    def delete_view(self, request, pk):
-        """
-        删除页面
-        :param request:
-        :param pk:
-        :return:
-        """
-
-
-class UserInfoHandler:
-    def __init__(self, model_class):
-        self.model_class = model_class
-
-    def list_view(self, request):
-        """
-        列表页面
-        :param request:
-        :return:
-        """
-        return HttpResponse('用户列表页面')
-
-    def add_view(self, request):
-        """
-        添加页面
-        :param request:
-        :return:
-        """
-
-    def edit_view(self, request, pk):
-        """
-        编辑页面
-        :param request:
-        :param pk:
-        :return:
-        """
-
-    def delete_view(self, request, pk):
-        """
-        删除页面
-        :param request:
-        :param pk:
-        :return:
-        """
+        patterns = [
+            re_path(r'^list/$', self.list_view),
+            re_path(r'^add/$', self.add_view),
+        ]
+        return patterns
 
 
 site.register(models.Department, DeaprtmentHandler)
-site.register(models.UserInfo, UserInfoHandler)
+
+site.register(models.UserInfo, UserInfoHandler, 'private')

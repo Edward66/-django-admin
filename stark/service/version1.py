@@ -1,5 +1,5 @@
 from django.urls import re_path
-from django.shortcuts import HttpResponse
+from django.shortcuts import HttpResponse, render
 
 
 class StarkSite:
@@ -8,43 +8,43 @@ class StarkSite:
         self.app_name = 'stark'
         self.namespace = 'stark'
 
-    def register(self, model_class, handler_class):
+    def register(self, model_class, handler_class=None, prev=None):
         """
 
         :param model_class: 是models中的数据库表对应的类。models.UserInfo
         :param handler_class: 处理请求的视图函数所在的类
+        :param prev: 生成URL的前缀
         :return:
         """
+        if not handler_class:
+            handler_class = StarkHandler
+        self._registry.append({'model_class': model_class, 'handler': handler_class(model_class), 'prev': prev})
 
         """
         self._registry = [
-            {'model_class': model.Department,'handler':DepartmentHandler(models.Department)},
-            {'model_class': model.UserInfo,'handler':UserInfo(models.UserInfo)}, 
-            {'model_class': model.Host,'handler':Host(models.Host)},
+            {'prev':'None',model_class': model.Department,'handler':DepartmentHandler(models.Department)对象中有一个model_class=models.Department},
+            {'prev':'private','model_class': model.UserInfo,'handler':UserInfo(models.UserInfo)对象中有一个model_class=models.UserInfo}, 
+            {'prev':'None','model_class': model.Host,'handler':Host(models.Host)对象中有一个model_class=models.Host},
         ]
         """
-
-        self._registry.append({'model_class': model_class, 'handler': handler_class(model_class)})
 
     def get_urls(self):
         patterns = []
         for item in self._registry:
             model_class = item['model_class']
-            handler = item['handler']
+            handler = item['handler']  # 实例化了StarkHandler，hanlder是StarkHandler的对象
+            prev = item['prev']
             app_name = model_class._meta.app_label  # 获取当前类所在的app名称
             model_name = model_class._meta.model_name  # 获取当前类所在的表名称
-            patterns.append(re_path(r'%s/%s/list' % (app_name, model_name,), handler.list_view))
-            patterns.append(re_path(r'%s/%s/add' % (app_name, model_name,), handler.add_view))
-            patterns.append(re_path(r'%s/%s/edit/(\d+)' % (app_name, model_name,), handler.edit_view))
-            patterns.append(re_path(r'%s/%s/delete/(\d+)' % (app_name, model_name,), handler.delete_view))
-            # <class 'app01.models.Department'>
-            # /app01/department/list/
-            # /app01/department/add/
-            # /app01/department/edit/(\d+)/
-            # /app01/department/del/(\d+)/
 
-            # patterns.append(re_path(r'^x1/', lambda request: HttpResponse('1')), )
-            # patterns.append(re_path(r'^x2/', lambda request: HttpResponse('1')), )
+            if prev:
+                patterns.append(
+                    re_path(r'^%s/%s/%s/' % (app_name, model_name, prev,), (handler.get_urls(), None, None))
+                )
+            else:
+                patterns.append(
+                    re_path(r'^%s/%s/' % (app_name, model_name,), (handler.get_urls(), None, None))
+                )
 
         return patterns
 
@@ -53,19 +53,61 @@ class StarkSite:
         return self.get_urls(), self.app_name, self.namespace
 
 
-"""
-[
+class StarkHandler:
+    def __init__(self, model_class):
+        self.model_class = model_class
 
-{'model_class': < class 'app01.models.Department' > ,'handler': 
-< app01.stark.DeaprtmentHandler object at 0x1075aba20 >}, 
+    def list_view(self, request):
+        """
+        列表页面
+        :param request:
+        :return:
+        """
+        # 访问http://127.0.0.1:8000/stark/app01/userinfo/list : <class 'app01.models.UserInfo'>
+        # 访问http://127.0.0.1:8000/stark/app02/host/list : <class 'app02.models.Host'>
+        # self.model_class是不一样的
 
-{'model_class': < class 'app01.models.UserInfo' > ,
-'handler': < app01.stark.UserInfoHandler object at 0x1075abac8 >}, 
+        data_list = self.model_class.objects.all()
+        return render(request, 'stark/data_list.html', {'data_list': data_list})
 
-{'model_class': < class 'app02.models.Host' > ,
-'handler': < app02.stark.HostHandler object at 0x1075abeb8 >}
+    def add_view(self, request):
+        """
+        添加页面
+        :param request:
+        :return:
+        """
+        return HttpResponse('添加页面')
 
-]
-"""
+    def edit_view(self, request, pk):
+        """
+        编辑页面
+        :param request:
+        :param pk:
+        :return:
+        """
+        return HttpResponse('编辑页面')
+
+    def delete_view(self, request, pk):
+        """
+        删除页面
+        :param request:
+        :param pk:
+        :return:
+        """
+        return HttpResponse('删除页面')
+
+    def get_urls(self):  # 先在传进来的handler里重写
+        patterns = [
+            re_path(r'^list/$', self.list_view),
+            re_path(r'^add/$', self.add_view),
+            re_path(r'^edit/(\d+)/$', self.edit_view),
+            re_path(r'^delete/(\d+)/$', self.delete_view),
+        ]
+        patterns.extend(self.extra_urls())  # 先去传进来的handler里找
+        return patterns
+
+    def extra_urls(self):
+        return []
+
 
 site = StarkSite()
