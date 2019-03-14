@@ -6,7 +6,7 @@ from stark.service.version1 import StarkHandler
 
 
 class HostHandler(StarkHandler):
-    pass
+    list_display = ['id', 'host', 'ip']
 
 
 class RoleHandler(StarkHandler):
@@ -17,7 +17,7 @@ class ProjectHandler(StarkHandler):
     pass
 
 
-site.register(models.Host)
+site.register(models.Host, HostHandler)
 site.register(models.Role)
 
 site.register(models.Project)

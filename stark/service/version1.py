@@ -53,6 +53,8 @@ class StarkSite:
 
 
 class StarkHandler:
+    list_display = []
+
     def __init__(self, model_class, prev):
         self.model_class = model_class
         self.prev = prev
@@ -67,8 +69,48 @@ class StarkHandler:
         # 访问http://127.0.0.1:8000/stark/app02/host/list : <class 'app02.models.Host'>
         # self.model_class是不一样的
 
+        # 1. 处理表格的表头
+        # 访问http://127.0.0.1:8000/stark/app01/userinfo/list
+        # 页面上要显示的列，示例：['name', 'age', 'email']
+
+        header_list = []
+        if self.list_display:
+            for field in self.list_display:  # self.model_class._meta.get_field()拿到的是数据库里的一个字段
+                verbose_name = self.model_class._meta.get_field(field).verbose_name
+                header_list.append(verbose_name)
+        else:
+            header_list.append(self.model_class._meta.model_name)  # 没有定义list_display，让表头显示表名称
+
+        # 用户访问的表  models.UserInfo
+
+        # 2. 处理表的内容 ['name','age']
+
         data_list = self.model_class.objects.all()
-        return render(request, 'stark/data_list.html', {'data_list': data_list})
+
+        '''
+        [
+            ['edward',28,],
+            ['mark' 18,],
+        ]
+        '''
+
+        body_list = []
+        for queryset_obj in data_list:
+            tr_list = []
+            if self.list_display:
+                for key in self.list_display:
+                    tr_list.append(getattr(queryset_obj, key))
+            else:
+                tr_list.append(queryset_obj)
+            body_list.append(tr_list)
+
+        context = {
+            'data_list': data_list,
+            'header_list': header_list,
+            'body_list': body_list,
+        }
+
+        return render(request, 'stark/data_list.html', context)
 
     def add_view(self, request):
         """
