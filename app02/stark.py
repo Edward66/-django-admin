@@ -19,4 +19,6 @@ class ProjectHandler(StarkHandler):
 
 site.register(models.Host)
 site.register(models.Role)
+
 site.register(models.Project)
+site.register(models.Project, prev='private')
