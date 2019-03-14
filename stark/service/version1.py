@@ -59,6 +59,16 @@ class StarkHandler:
         self.model_class = model_class
         self.prev = prev
 
+    def get_list_display(self):
+        """
+        获取页面上应该显示的列,自定义扩展，列如：根据用户的不同来显示不同的列
+        :return:
+        """
+        values = []
+        values.extend(self.list_display)
+
+        return values
+
     def list_view(self, request):
         """
         列表页面
@@ -73,9 +83,11 @@ class StarkHandler:
         # 访问http://127.0.0.1:8000/stark/app01/userinfo/list
         # 页面上要显示的列，示例：['name', 'age', 'email']
 
+        list_display = self.get_list_display()
+
         header_list = []
-        if self.list_display:
-            for field in self.list_display:  # self.model_class._meta.get_field()拿到的是数据库里的一个字段
+        if list_display:
+            for field in list_display:  # self.model_class._meta.get_field()拿到的是数据库里的一个字段
                 verbose_name = self.model_class._meta.get_field(field).verbose_name
                 header_list.append(verbose_name)
         else:
@@ -97,8 +109,8 @@ class StarkHandler:
         body_list = []
         for queryset_obj in data_list:
             tr_list = []
-            if self.list_display:
-                for key in self.list_display:
+            if list_display:
+                for key in list_display:
                     tr_list.append(getattr(queryset_obj, key))
             else:
                 tr_list.append(queryset_obj)
