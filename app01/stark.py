@@ -1,38 +1,53 @@
-from django.urls import re_path
-from django.utils.safestring import mark_safe  # 让字符串可以作为html标签显示在页面
-from django.shortcuts import HttpResponse
-
 from stark.service.version1 import site
-from stark.service.version1 import StarkHandler
+from stark.service.version1 import StarkHandler, get_choice_text
 
 from app01 import models
 
 
+def get_choice_text(title, field):
+    """
+    对于Stark组件中定义列时，choice如果想要显示中文信息，调用此方法即可
+    :param title: 希望页面显示的表头
+    :param field: 字段名称
+    :return:
+    """
+
+    def wrapper(self, obj=None, is_header=None):
+        if is_header:
+            return title
+        method = 'get_%s_display' % field
+        return getattr(obj, method)()
+
+    return wrapper
+
+
 class DeaprtmentHandler(StarkHandler):
-    list_display = ['id', 'title']
+    list_display = ['id', 'title', StarkHandler.display_edit, StarkHandler.display_del]
 
 
 class UserInfoHandler(StarkHandler):
-    def display_edit(self, obj=None, is_header=None):
-        """
-        自定义页面显示的列（表头和内容）
-        :param obj:
-        :param is_header:
-        :return:
-        """
+
+    def display_gender(self, obj, is_header=None):
         if is_header:
-            return '编辑表头'
+            return '性别'
+        return obj.get_gender_display()  # 对于choice字段，可以通过这个方法获取字符串
 
-        return mark_safe('<a href="https://www.baidu.com">编辑</a>')
-
-    def display_del(self, obj=None, is_header=None):
+    def display_classes(self, obj, is_header=None):
         if is_header:
-            return '删除表头'
-        return mark_safe('<a href="https://www.baidu.com">删除</a>')
+            return '班级'
+        return obj.get_classes_display()
 
-    # 定制页面显示的列
-    # 前面没有对象，相当于写了 UserInfoHandler.display_edit
-    list_display = ['name', 'age', 'email', display_edit, display_del]
+    # depart：foreign_key用__str__显示（在models里定义）
+    list_display = [
+        'name',
+        get_choice_text('性别', 'gender'),
+        get_choice_text('班级', 'classes'),
+        'age',
+        'email',
+        'depart',
+        StarkHandler.display_edit,
+        StarkHandler.display_del
+    ]
 
 
 site.register(models.Department, DeaprtmentHandler)

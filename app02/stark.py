@@ -6,7 +6,7 @@ from stark.service.version1 import StarkHandler
 
 
 class HostHandler(StarkHandler):
-    list_display = ['id', 'host', 'ip']
+    list_display = ['id', 'host', 'ip', StarkHandler.display_edit, StarkHandler.display_del]
 
 
 class RoleHandler(StarkHandler):

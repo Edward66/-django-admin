@@ -1,7 +1,26 @@
 from types import FunctionType
 
 from django.urls import re_path
+from django.urls import reverse
+from django.utils.safestring import mark_safe
 from django.shortcuts import HttpResponse, render
+
+
+def get_choice_text(title, field):
+    """
+    对于Stark组件中定义列时，choice如果想要显示中文信息，调用此方法即可
+    :param title: 希望页面显示的表头
+    :param field: 字段名称
+    :return:
+    """
+
+    def wrapper(self, obj=None, is_header=None):
+        if is_header:
+            return title
+        method = 'get_%s_display' % field
+        return getattr(obj, method)()
+
+    return wrapper
 
 
 class StarkSite:
@@ -19,7 +38,8 @@ class StarkSite:
         """
         if not handler_class:
             handler_class = StarkHandler
-        self._registry.append({'model_class': model_class, 'handler': handler_class(model_class, prev), 'prev': prev})
+        self._registry.append(
+            {'model_class': model_class, 'handler': handler_class(self, model_class, prev), 'prev': prev})
 
         """
         self._registry = [
@@ -57,9 +77,28 @@ class StarkSite:
 class StarkHandler:
     list_display = []
 
-    def __init__(self, model_class, prev):
+    def __init__(self, site, model_class, prev):
+        self.site = site
         self.model_class = model_class
         self.prev = prev
+
+    def display_edit(self, obj=None, is_header=None):
+        """
+        自定义页面显示的列（表头和内容）
+        :param obj:
+        :param is_header:
+        :return:
+        """
+        if is_header:
+            return '编辑表头'
+        name = '%s:%s' % (self.site.namespace, self.get_edit_url_name)  # stark:app01_userinfo_edit
+        return mark_safe('<a href="%s">编辑</a>' % reverse(name, args=(obj.pk,)))
+
+    def display_del(self, obj=None, is_header=None):
+        if is_header:
+            return '删除表头'
+        name = '%s:%s' % (self.site.namespace, self.get_delete_url_name)
+        return mark_safe('<a href="%s">删除</a>' % reverse(name, args=(obj.pk,)))
 
     def get_list_display(self):
         """
@@ -114,6 +153,7 @@ class StarkHandler:
 
         body_list = []
         for queryset_obj in data_list:
+            print(queryset_obj)
             tr_list = []
             if list_display:
                 for field_or_func in list_display:
@@ -121,7 +161,7 @@ class StarkHandler:
                         # field_or_func是函数（类调用的），所以要传递self
                         tr_list.append(field_or_func(self, queryset_obj, is_header=False))
                     else:
-                        tr_list.append(getattr(queryset_obj, field_or_func))
+                        tr_list.append(getattr(queryset_obj, field_or_func))  # obj.depart
             else:
                 tr_list.append(queryset_obj)
             body_list.append(tr_list)
