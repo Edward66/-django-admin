@@ -1,3 +1,5 @@
+from types import FunctionType
+
 from django.urls import re_path
 from django.shortcuts import HttpResponse, render
 
@@ -87,9 +89,13 @@ class StarkHandler:
 
         header_list = []
         if list_display:
-            for field in list_display:  # self.model_class._meta.get_field()拿到的是数据库里的一个字段
-                verbose_name = self.model_class._meta.get_field(field).verbose_name
-                header_list.append(verbose_name)
+            for field_or_func in list_display:  # self.model_class._meta.get_field()拿到的是数据库里的一个字段
+                if isinstance(field_or_func, FunctionType):
+                    verbose_name = field_or_func(self, obj=None, is_header=True)
+                    header_list.append(verbose_name)
+                else:
+                    verbose_name = self.model_class._meta.get_field(field_or_func).verbose_name
+                    header_list.append(verbose_name)
         else:
             header_list.append(self.model_class._meta.model_name)  # 没有定义list_display，让表头显示表名称
 
@@ -110,8 +116,12 @@ class StarkHandler:
         for queryset_obj in data_list:
             tr_list = []
             if list_display:
-                for key in list_display:
-                    tr_list.append(getattr(queryset_obj, key))
+                for field_or_func in list_display:
+                    if isinstance(field_or_func, FunctionType):
+                        # field_or_func是函数（类调用的），所以要传递self
+                        tr_list.append(field_or_func(self, queryset_obj, is_header=False))
+                    else:
+                        tr_list.append(getattr(queryset_obj, field_or_func))
             else:
                 tr_list.append(queryset_obj)
             body_list.append(tr_list)
