@@ -5,6 +5,8 @@ from django.urls import reverse
 from django.utils.safestring import mark_safe
 from django.shortcuts import HttpResponse, render
 
+from stark.utils.pagination import Pagination
+
 
 def get_choice_text(title, field):
     """
@@ -76,6 +78,7 @@ class StarkSite:
 
 class StarkHandler:
     list_display = []
+    per_page_count = 10
 
     def __init__(self, site, model_class, prev):
         self.site = site
@@ -124,6 +127,33 @@ class StarkHandler:
         # 访问http://127.0.0.1:8000/stark/app01/userinfo/list
         # 页面上要显示的列，示例：['name', 'age', 'email']
 
+        # 从数据库中获取所有的数据
+
+        # 根据URL中获取的 page = 3
+        """
+        # 1. 根据用户访问的页面，计算出数据库索引位置
+            1  0:10
+            2  10:20
+            3  20:30
+            ...
+        
+        # 2. 生成html中的页码
+        """
+
+        all_count = self.model_class.objects.all().count()
+        query_params = request.GET.copy()  # page=1&level=2
+        # query_params._mutable = True  # 把_mutable变成True，才可以被修改page
+        # query_params['page'] = 2
+        pager = Pagination(
+            current_page=request.GET.get('page'),
+            all_count=all_count,
+            base_url=request.path_info,
+            query_params=query_params,
+            per_page_data=self.per_page_count,
+        )
+
+        data_list = self.model_class.objects.all()[pager.start:pager.end]
+
         list_display = self.get_list_display()
 
         header_list = []
@@ -141,8 +171,6 @@ class StarkHandler:
         # 用户访问的表  models.UserInfo
 
         # 2. 处理表的内容 ['name','age']
-
-        data_list = self.model_class.objects.all()
 
         '''
         [
@@ -170,6 +198,7 @@ class StarkHandler:
             'data_list': data_list,
             'header_list': header_list,
             'body_list': body_list,
+            'pager': pager
         }
 
         return render(request, 'stark/data_list.html', context)

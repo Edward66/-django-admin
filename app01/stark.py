@@ -4,28 +4,12 @@ from stark.service.version1 import StarkHandler, get_choice_text
 from app01 import models
 
 
-def get_choice_text(title, field):
-    """
-    对于Stark组件中定义列时，choice如果想要显示中文信息，调用此方法即可
-    :param title: 希望页面显示的表头
-    :param field: 字段名称
-    :return:
-    """
-
-    def wrapper(self, obj=None, is_header=None):
-        if is_header:
-            return title
-        method = 'get_%s_display' % field
-        return getattr(obj, method)()
-
-    return wrapper
-
-
 class DeaprtmentHandler(StarkHandler):
     list_display = ['id', 'title', StarkHandler.display_edit, StarkHandler.display_del]
 
 
 class UserInfoHandler(StarkHandler):
+    per_page_count = 1
 
     def display_gender(self, obj, is_header=None):
         if is_header:
