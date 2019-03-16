@@ -21,6 +21,7 @@ class DeaprtmentHandler(StarkHandler):
 class UserInfoHandler(StarkHandler):
     # depart：foreign_key用__str__显示（在models里定义）
     list_display = [
+        StarkHandler.display_checkbox,
         'name',
         get_choice_text('性别', 'gender'),
         get_choice_text('班级', 'classes'),

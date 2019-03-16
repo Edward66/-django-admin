@@ -123,6 +123,17 @@ class StarkHandler:
 
         return DynamicModelForm
 
+    def display_checkbox(self, obj=None, is_header=None):
+        """
+        自定义显示的列
+        :param obj:
+        :param is_header:
+        :return:
+        """
+        if is_header:
+            return '选择'
+        return mark_safe('<input type="checkbox" name="pk" values="%s"/>' % obj.pk)
+
     def display_edit(self, obj=None, is_header=None):
         """
         自定义页面显示的列（表头和内容）
@@ -228,7 +239,7 @@ class StarkHandler:
             'pager': pager,
             'add_btn': add_btn,
             'search_list': search_list,
-            'search_value':search_value,
+            'search_value': search_value,
         }
 
         return render(request, 'stark/data_list.html', context)
