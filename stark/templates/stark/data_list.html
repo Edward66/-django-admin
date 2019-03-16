@@ -5,7 +5,13 @@
 
 
     <div class="custom-container">
-        <table class="table table-hover table-bordered   table-striped">
+        {% if add_btn %}
+            <div style="margin:10px 0">
+                {{ add_btn|safe }}
+            </div>
+        {% endif %}
+
+        <table class="table table-hover table-bordered table-striped">
             <thead>
             <tr>
                 {% for header in header_list %}

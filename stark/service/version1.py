@@ -1,5 +1,7 @@
+import functools
 from types import FunctionType
 
+from django.http import QueryDict
 from django.urls import re_path
 from django.urls import reverse
 from django.utils.safestring import mark_safe
@@ -79,11 +81,18 @@ class StarkSite:
 class StarkHandler:
     list_display = []
     per_page_count = 10
+    has_add_btn = True
 
     def __init__(self, site, model_class, prev):
         self.site = site
         self.model_class = model_class
         self.prev = prev
+        self.request = None
+
+    def get_add_btn(self):
+        if self.has_add_btn:
+            return f'<a href="%s" class="btn btn-primary">添加</a>' % self.reverse_add_url()
+        return None
 
     def display_edit(self, obj=None, is_header=None):
         """
@@ -123,23 +132,7 @@ class StarkHandler:
         # 访问http://127.0.0.1:8000/stark/app02/host/list : <class 'app02.models.Host'>
         # self.model_class是不一样的
 
-        # 1. 处理表格的表头
-        # 访问http://127.0.0.1:8000/stark/app01/userinfo/list
-        # 页面上要显示的列，示例：['name', 'age', 'email']
-
-        # 从数据库中获取所有的数据
-
-        # 根据URL中获取的 page = 3
-        """
-        # 1. 根据用户访问的页面，计算出数据库索引位置
-            1  0:10
-            2  10:20
-            3  20:30
-            ...
-        
-        # 2. 生成html中的页码
-        """
-
+        # 1.处理分页
         all_count = self.model_class.objects.all().count()
         query_params = request.GET.copy()  # page=1&level=2
         # query_params._mutable = True  # 把_mutable变成True，才可以被修改page
@@ -156,6 +149,10 @@ class StarkHandler:
 
         list_display = self.get_list_display()
 
+        # 2. 处理表格的表头
+        # 访问http://127.0.0.1:8000/stark/app01/userinfo/list
+        # 页面上要显示的列，示例：['name', 'age', 'email']
+
         header_list = []
         if list_display:
             for field_or_func in list_display:  # self.model_class._meta.get_field()拿到的是数据库里的一个字段
@@ -168,16 +165,7 @@ class StarkHandler:
         else:
             header_list.append(self.model_class._meta.model_name)  # 没有定义list_display，让表头显示表名称
 
-        # 用户访问的表  models.UserInfo
-
-        # 2. 处理表的内容 ['name','age']
-
-        '''
-        [
-            ['edward',28,],
-            ['mark' 18,],
-        ]
-        '''
+        # 3. 处理表的内容 ['name','age']
 
         body_list = []
         for queryset_obj in data_list:
@@ -194,11 +182,15 @@ class StarkHandler:
                 tr_list.append(queryset_obj)
             body_list.append(tr_list)
 
+        # 4.处理添加按钮
+        add_btn = self.get_add_btn()
+
         context = {
             'data_list': data_list,
             'header_list': header_list,
             'body_list': body_list,
-            'pager': pager
+            'pager': pager,
+            'add_btn': add_btn,
         }
 
         return render(request, 'stark/data_list.html', context)
@@ -267,12 +259,33 @@ class StarkHandler:
         """
         return self.get_url_name('delete')
 
+    def reverse_add_url(self):
+        # 根据别名进行反向生成URL
+        name = '%s:%s' % (self.site.namespace, self.get_add_url_name)
+        base_url = reverse(name)
+        if not self.request.GET:
+            add_url = base_url
+        else:
+            params = self.request.GET.urlencode()
+            new_query_dict = QueryDict(mutable=True)
+            new_query_dict['_filter'] = params
+            add_url = '%s?%s' % (base_url, new_query_dict.urlencode())
+        return add_url
+
+    def wrapper(self, func):  # 增删改查视图函数的时候，给self.request赋值request
+        @functools.wraps(func)  # 保留原函数的原信息，写装饰器建议写上这个。
+        def inner(request, *args, **kwargs):
+            self.request = request
+            return func(request, *args, **kwargs)
+
+        return inner
+
     def get_urls(self):  # 先在传进来的handler里重写
         patterns = [
-            re_path(r'^list/$', self.list_view, name=self.get_list_url_name),
-            re_path(r'^add/$', self.add_view, name=self.get_add_url_name),
-            re_path(r'^edit/(\d+)/$', self.edit_view, name=self.get_edit_url_name),
-            re_path(r'^delete/(\d+)/$', self.delete_view, name=self.get_delete_url_name),
+            re_path(r'^list/$', self.wrapper(self.list_view), name=self.get_list_url_name),
+            re_path(r'^add/$', self.wrapper(self.add_view), name=self.get_add_url_name),
+            re_path(r'^edit/(\d+)/$', self.wrapper(self.edit_view), name=self.get_edit_url_name),
+            re_path(r'^delete/(\d+)/$', self.wrapper(self.delete_view), name=self.get_delete_url_name),
         ]
         patterns.extend(self.extra_urls())  # 先去传进来的handler里找
         return patterns

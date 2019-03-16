@@ -5,22 +5,12 @@ from app01 import models
 
 
 class DeaprtmentHandler(StarkHandler):
+    has_add_btn = True
+
     list_display = ['id', 'title', StarkHandler.display_edit, StarkHandler.display_del]
 
 
 class UserInfoHandler(StarkHandler):
-    per_page_count = 1
-
-    def display_gender(self, obj, is_header=None):
-        if is_header:
-            return '性别'
-        return obj.get_gender_display()  # 对于choice字段，可以通过这个方法获取字符串
-
-    def display_classes(self, obj, is_header=None):
-        if is_header:
-            return '班级'
-        return obj.get_classes_display()
-
     # depart：foreign_key用__str__显示（在models里定义）
     list_display = [
         'name',
@@ -32,6 +22,10 @@ class UserInfoHandler(StarkHandler):
         StarkHandler.display_edit,
         StarkHandler.display_del
     ]
+
+    per_page_count = 1
+
+    has_add_btn = True
 
 
 site.register(models.Department, DeaprtmentHandler)

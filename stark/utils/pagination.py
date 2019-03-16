@@ -23,14 +23,14 @@ class Pagination(object):
             self.current_page = 1
         self.all_count = all_count
         self.query_params = query_params
-        self.per_page = per_page_data
+        self.per_page_data = per_page_data
         self.display_page_number = display_page_number
-        real_page_number, remainder = divmod(all_count, per_page_data)
+        real_page_number, remainder = divmod(self.all_count, self.per_page_data)
         if remainder != 0:
             real_page_number += 1
         self.real_page_number = real_page_number
 
-        half_page_number = int(display_page_number / 2)
+        half_page_number = int(self.display_page_number / 2)
         self.half_page_number = half_page_number
 
     @property
@@ -40,7 +40,7 @@ class Pagination(object):
         :param self:
         :return:
         """
-        return (self.current_page - 1) * self.per_page
+        return (self.current_page - 1) * self.per_page_data
 
     @property
     def end(self):
@@ -48,7 +48,7 @@ class Pagination(object):
         数据获取值结束索引
         :return:
         """
-        return self.current_page * self.per_page
+        return self.current_page * self.per_page_data
 
     def page_html(self):
         """
