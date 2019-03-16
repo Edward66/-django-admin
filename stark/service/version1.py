@@ -1,13 +1,21 @@
 import functools
 from types import FunctionType
 
+from django import forms
 from django.http import QueryDict
 from django.urls import re_path
 from django.urls import reverse
 from django.utils.safestring import mark_safe
-from django.shortcuts import HttpResponse, render
+from django.shortcuts import HttpResponse, render, redirect
 
 from stark.utils.pagination import Pagination
+
+
+class StarkModelForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        super(StarkModelForm, self).__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            field.widget.attrs['class'] = 'form-control'
 
 
 def get_choice_text(title, field):
@@ -82,6 +90,7 @@ class StarkHandler:
     list_display = []
     per_page_count = 10
     has_add_btn = True
+    model_form_class = None
 
     def __init__(self, site, model_class, prev):
         self.site = site
@@ -93,6 +102,17 @@ class StarkHandler:
         if self.has_add_btn:
             return f'<a href="%s" class="btn btn-primary">添加</a>' % self.reverse_add_url()
         return None
+
+    def get_model_form_class(self):
+        if self.model_form_class:
+            return self.model_form_class
+
+        class DynamicModelForm(StarkModelForm):
+            class Meta:
+                model = self.model_class
+                fields = '__all__'
+
+        return DynamicModelForm
 
     def display_edit(self, obj=None, is_header=None):
         """
@@ -195,13 +215,34 @@ class StarkHandler:
 
         return render(request, 'stark/data_list.html', context)
 
+    def save(self, form, is_update=False):
+        """
+        在使用ModelForm保存数据之前预留的钩子方法
+        :param form:
+        :param is_update:
+        :return:
+        """
+        form.save()
+
     def add_view(self, request):
         """
         添加页面
         :param request:
         :return:
         """
-        return HttpResponse('添加页面')
+
+        model_form_class = self.get_model_form_class()
+        if request.method == 'GET':
+            form = model_form_class
+            return render(request, 'stark/change.html', {'form': form})
+
+        form = model_form_class(data=request.POST)
+        if form.is_valid():
+            self.save(form, is_update=False)
+            # 在数据库保存成功后，跳回列表页面（携带原来的参数）
+            return redirect(self.rever_list_url())
+
+        return render(request, 'stark/change.html', {'form': form})
 
     def edit_view(self, request, pk):
         """
@@ -271,6 +312,14 @@ class StarkHandler:
             new_query_dict['_filter'] = params
             add_url = '%s?%s' % (base_url, new_query_dict.urlencode())
         return add_url
+
+    def rever_list_url(self):
+        name = '%s:%s' % (self.site.namespace, self.get_list_url_name)
+        basic_url = reverse(name)
+        params = self.request.GET.get('_filter')
+        if not params:
+            return basic_url
+        return '%s?%s' % (basic_url, params)
 
     def wrapper(self, func):  # 增删改查视图函数的时候，给self.request赋值request
         @functools.wraps(func)  # 保留原函数的原信息，写装饰器建议写上这个。

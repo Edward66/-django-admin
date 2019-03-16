@@ -1,7 +1,15 @@
+from django import forms
+
 from stark.service.version1 import site
-from stark.service.version1 import StarkHandler, get_choice_text
+from stark.service.version1 import StarkHandler, get_choice_text, StarkModelForm
 
 from app01 import models
+
+
+class UserInfoModelForm(StarkModelForm):
+    class Meta:
+        model = models.UserInfo
+        fields = ['name', 'gender', 'classes', 'age', 'email']
 
 
 class DeaprtmentHandler(StarkHandler):
@@ -26,6 +34,12 @@ class UserInfoHandler(StarkHandler):
     per_page_count = 1
 
     has_add_btn = True
+
+    model_form_class = UserInfoModelForm
+
+    def save(self, form, is_update=False):
+        form.instance.depart_id = 1  # 如果页面不想显示部门，可以在form表单保存之前，先给depart_id一个默认值
+        form.save()
 
 
 site.register(models.Department, DeaprtmentHandler)
