@@ -2,6 +2,7 @@ import functools
 from types import FunctionType
 
 from django import forms
+from django.db.models import Q
 from django.http import QueryDict
 from django.urls import re_path
 from django.urls import reverse
@@ -92,12 +93,16 @@ class StarkHandler:
     has_add_btn = True
     model_form_class = None
     order_list = []
+    search_list = []
 
     def __init__(self, site, model_class, prev):
         self.site = site
         self.model_class = model_class
         self.prev = prev
         self.request = None
+
+    def get_search_list(self):
+        return self.search_list
 
     def get_order_list(self):
         return self.order_list or ['-id', ]
@@ -150,13 +155,19 @@ class StarkHandler:
         :param request:
         :return:
         """
-        # 访问http://127.0.0.1:8000/stark/app01/userinfo/list : <class 'app01.models.UserInfo'>
-        # 访问http://127.0.0.1:8000/stark/app02/host/list : <class 'app02.models.Host'>
-        # self.model_class是不一样的
+
+        search_list = self.get_search_list()
+        search_value = request.GET.get('q', '')
+        conn = Q()
+        conn.connector = 'OR'
+        if search_value:
+            for item in search_list:
+                conn.children.append((item, search_value))
 
         # 1. 获取排序
+
         order_list = self.get_order_list()
-        queryset = self.model_class.objects.all().order_by(*order_list)
+        queryset = self.model_class.objects.filter(conn).order_by(*order_list)
 
         # 2.处理分页
         all_count = queryset.count()
@@ -195,7 +206,6 @@ class StarkHandler:
 
         body_list = []
         for queryset_obj in data_list:
-            print(queryset_obj)
             tr_list = []
             if list_display:
                 for field_or_func in list_display:
@@ -217,6 +227,8 @@ class StarkHandler:
             'body_list': body_list,
             'pager': pager,
             'add_btn': add_btn,
+            'search_list': search_list,
+            'search_value':search_value,
         }
 
         return render(request, 'stark/data_list.html', context)

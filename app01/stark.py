@@ -14,7 +14,7 @@ class UserInfoModelForm(StarkModelForm):
 
 class DeaprtmentHandler(StarkHandler):
     has_add_btn = True
-
+    search_list = ['title']
     list_display = ['id', 'title', StarkHandler.display_edit, StarkHandler.display_del]
 
 
@@ -38,6 +38,9 @@ class UserInfoHandler(StarkHandler):
     model_form_class = UserInfoModelForm
 
     order_list = ['id']
+
+    # # 姓名中含有关键字或邮箱中含有关键字
+    search_list = ['name__contains', 'email__contains']  # 如果想精确查找去掉contains就行，列表里的字符串对应ORM语法
 
     def save(self, form, is_update=False):
         form.instance.depart_id = 1  # 如果页面不想显示部门，可以在form表单保存之前，先给depart_id一个默认值
