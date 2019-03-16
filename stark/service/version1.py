@@ -123,14 +123,12 @@ class StarkHandler:
         """
         if is_header:
             return '编辑表头'
-        name = '%s:%s' % (self.site.namespace, self.get_edit_url_name)  # stark:app01_userinfo_edit
-        return mark_safe('<a href="%s">编辑</a>' % reverse(name, args=(obj.pk,)))
+        return mark_safe('<a href="%s">编辑</a>' % self.reverse_edit_url(pk=obj.pk))
 
     def display_del(self, obj=None, is_header=None):
         if is_header:
             return '删除表头'
-        name = '%s:%s' % (self.site.namespace, self.get_delete_url_name)
-        return mark_safe('<a href="%s">删除</a>' % reverse(name, args=(obj.pk,)))
+        return mark_safe('<a href="%s">删除</a>' % self.reverse_delete_url(pk=obj.pk))
 
     def get_list_display(self):
         """
@@ -240,7 +238,7 @@ class StarkHandler:
         if form.is_valid():
             self.save(form, is_update=False)
             # 在数据库保存成功后，跳回列表页面（携带原来的参数）
-            return redirect(self.rever_list_url())
+            return redirect(self.reverse_list_url())
 
         return render(request, 'stark/change.html', {'form': form})
 
@@ -251,7 +249,20 @@ class StarkHandler:
         :param pk:
         :return:
         """
-        return HttpResponse('编辑页面')
+
+        current_edit_obj = self.model_class.objects.filter(pk=pk).first()
+
+        if not current_edit_obj:
+            return HttpResponse('要修改的数据不存在，请重新选择')
+        model_form_class = self.get_model_form_class()
+        if request.method == 'GET':
+            form = model_form_class(instance=current_edit_obj)
+            return render(request, 'stark/change.html', {'form': form})
+        form = model_form_class(data=request.POST, instance=current_edit_obj)
+        if form.is_valid():
+            self.save(form, is_update=False)
+            return redirect(self.reverse_list_url())
+        return render(request, 'stark/change.html', {'form': form})
 
     def delete_view(self, request, pk):
         """
@@ -260,7 +271,13 @@ class StarkHandler:
         :param pk:
         :return:
         """
-        return HttpResponse('删除页面')
+
+        list_url = self.reverse_list_url()
+        if request.method == 'GET':
+            return render(request, 'stark/delete.html', {'cancel': list_url})
+        self.model_class.objects.filter(pk=pk).delete()
+
+        return redirect(list_url)
 
     def get_url_name(self, crud):
         app_name, model_name = self.model_class._meta.app_label, self.model_class._meta.model_name
@@ -301,7 +318,10 @@ class StarkHandler:
         return self.get_url_name('delete')
 
     def reverse_add_url(self):
-        # 根据别名进行反向生成URL
+        """
+        生成带有原搜索条件的添加URL
+        :return:
+        """
         name = '%s:%s' % (self.site.namespace, self.get_add_url_name)
         base_url = reverse(name)
         if not self.request.GET:
@@ -313,7 +333,47 @@ class StarkHandler:
             add_url = '%s?%s' % (base_url, new_query_dict.urlencode())
         return add_url
 
-    def rever_list_url(self):
+    def reverse_edit_url(self, *args, **kwargs):
+        """
+         生成带有原搜索条件的编辑URL
+        :param args:
+        :param kwargs:
+        :return:
+        """
+        name = '%s:%s' % (self.site.namespace, self.get_edit_url_name)
+        base_url = reverse(name, args=args, kwargs=kwargs)
+        if not self.request.GET:
+            edit_url = base_url
+        else:
+            params = self.request.GET.urlencode()
+            new_query_dict = QueryDict(mutable=True)
+            new_query_dict['_filter'] = params
+            edit_url = '%s?%s' % (base_url, new_query_dict.urlencode())
+        return edit_url
+
+    def reverse_delete_url(self, *args, **kwargs):
+        """
+         生成带有原搜索条件的删除URL
+        :param args:
+        :param kwargs:
+        :return:
+        """
+        name = '%s:%s' % (self.site.namespace, self.get_delete_url_name)
+        base_url = reverse(name, args=args, kwargs=kwargs)
+        if not self.request.GET:
+            delete_url = base_url
+        else:
+            params = self.request.GET.urlencode()
+            new_query_dict = QueryDict(mutable=True)
+            new_query_dict['_filter'] = params
+            delete_url = "%s?%s" % (base_url, new_query_dict.urlencode())
+        return delete_url
+
+    def reverse_list_url(self):
+        """
+        跳转回列表页面时，生成的URL
+        :return:
+        """
         name = '%s:%s' % (self.site.namespace, self.get_list_url_name)
         basic_url = reverse(name)
         params = self.request.GET.get('_filter')
@@ -333,8 +393,8 @@ class StarkHandler:
         patterns = [
             re_path(r'^list/$', self.wrapper(self.list_view), name=self.get_list_url_name),
             re_path(r'^add/$', self.wrapper(self.add_view), name=self.get_add_url_name),
-            re_path(r'^edit/(\d+)/$', self.wrapper(self.edit_view), name=self.get_edit_url_name),
-            re_path(r'^delete/(\d+)/$', self.wrapper(self.delete_view), name=self.get_delete_url_name),
+            re_path(r'^edit/(?P<pk>\d+)/$', self.wrapper(self.edit_view), name=self.get_edit_url_name),
+            re_path(r'^delete/(?P<pk>\d+)/$', self.wrapper(self.delete_view), name=self.get_delete_url_name),
         ]
         patterns.extend(self.extra_urls())  # 先去传进来的handler里找
         return patterns

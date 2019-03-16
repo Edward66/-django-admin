@@ -45,3 +45,12 @@ class UserInfoHandler(StarkHandler):
 site.register(models.Department, DeaprtmentHandler)
 
 site.register(models.UserInfo, UserInfoHandler)
+
+
+class DeployHandler(StarkHandler):
+    per_page_count = 1
+
+    list_display = ['title', get_choice_text('状态', 'status'), StarkHandler.display_edit, StarkHandler.display_del]
+
+
+site.register(models.Deploy, DeployHandler)
