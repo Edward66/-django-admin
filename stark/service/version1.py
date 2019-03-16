@@ -91,12 +91,16 @@ class StarkHandler:
     per_page_count = 10
     has_add_btn = True
     model_form_class = None
+    order_list = []
 
     def __init__(self, site, model_class, prev):
         self.site = site
         self.model_class = model_class
         self.prev = prev
         self.request = None
+
+    def get_order_list(self):
+        return self.order_list or ['-id', ]
 
     def get_add_btn(self):
         if self.has_add_btn:
@@ -150,8 +154,12 @@ class StarkHandler:
         # 访问http://127.0.0.1:8000/stark/app02/host/list : <class 'app02.models.Host'>
         # self.model_class是不一样的
 
-        # 1.处理分页
-        all_count = self.model_class.objects.all().count()
+        # 1. 获取排序
+        order_list = self.get_order_list()
+        queryset = self.model_class.objects.all().order_by(*order_list)
+
+        # 2.处理分页
+        all_count = queryset.count()
         query_params = request.GET.copy()  # page=1&level=2
         # query_params._mutable = True  # 把_mutable变成True，才可以被修改page
         # query_params['page'] = 2
@@ -163,11 +171,11 @@ class StarkHandler:
             per_page_data=self.per_page_count,
         )
 
-        data_list = self.model_class.objects.all()[pager.start:pager.end]
+        data_list = queryset[pager.start:pager.end]
 
         list_display = self.get_list_display()
 
-        # 2. 处理表格的表头
+        # 3. 处理表格的表头
         # 访问http://127.0.0.1:8000/stark/app01/userinfo/list
         # 页面上要显示的列，示例：['name', 'age', 'email']
 
@@ -183,7 +191,7 @@ class StarkHandler:
         else:
             header_list.append(self.model_class._meta.model_name)  # 没有定义list_display，让表头显示表名称
 
-        # 3. 处理表的内容 ['name','age']
+        # 4. 处理表的内容 ['name','age']
 
         body_list = []
         for queryset_obj in data_list:
@@ -200,7 +208,7 @@ class StarkHandler:
                 tr_list.append(queryset_obj)
             body_list.append(tr_list)
 
-        # 4.处理添加按钮
+        # 5.处理添加按钮
         add_btn = self.get_add_btn()
 
         context = {

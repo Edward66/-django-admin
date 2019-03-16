@@ -31,11 +31,13 @@ class UserInfoHandler(StarkHandler):
         StarkHandler.display_del
     ]
 
-    per_page_count = 1
+    per_page_count = 10
 
     has_add_btn = True
 
     model_form_class = UserInfoModelForm
+
+    order_list = ['id']
 
     def save(self, form, is_update=False):
         form.instance.depart_id = 1  # 如果页面不想显示部门，可以在form表单保存之前，先给depart_id一个默认值
