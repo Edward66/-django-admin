@@ -96,11 +96,16 @@ class StarkHandler:
     search_list = []
     action_list = []
 
+    search_group = []
+
     def __init__(self, site, model_class, prev):
         self.site = site
         self.model_class = model_class
         self.prev = prev
         self.request = None
+
+    def get_search_group(self):
+        return self.search_group
 
     def get_action_list(self):
         return self.action_list
@@ -274,6 +279,25 @@ class StarkHandler:
         # 7.处理添加按钮
         add_btn = self.get_add_btn()
 
+        # 8. 处理组合搜索
+        from django.db.models import ForeignKey, ManyToManyField
+        search_group = self.get_search_group()  # ['gender','depart']
+        for field in search_group:
+            # 根据gender或depart字符串，去自己对应的Model类中找到字段对象
+            field_obj = self.model_class._meta.get_field(field)
+
+            # 获取关联数据
+            if isinstance(field_obj, ForeignKey) or isinstance(field_obj, ManyToManyField):
+                # FK和M2M，应该获取其关联的表中的数据
+                print(field, field_obj.related_model.objects.all())
+
+                # print(field, field_obj.related_model) # django2.x用这个
+                # print(field,field_obj.rel.model)  # django 1.x用这个
+
+            else:
+                # 获取choice中的数据
+                print(field, field_obj.choices)
+
         context = {
             'data_list': data_list,
             'header_list': header_list,
@@ -283,6 +307,7 @@ class StarkHandler:
             'search_list': search_list,
             'search_value': search_value,
             'action_dict': action_dict,
+            'search_group': search_group,
         }
 
         return render(request, 'stark/data_list.html', context)
