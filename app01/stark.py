@@ -1,4 +1,4 @@
-from django import forms
+from django.shortcuts import redirect
 
 from stark.service.version1 import site
 from stark.service.version1 import StarkHandler, get_choice_text, StarkModelForm
@@ -42,6 +42,8 @@ class UserInfoHandler(StarkHandler):
 
     # # 姓名中含有关键字或邮箱中含有关键字
     search_list = ['name__contains', 'email__contains']  # 如果想精确查找去掉contains就行，列表里的字符串对应ORM语法
+
+    action_list = [StarkHandler.action_multi_delete, ]
 
     def save(self, form, is_update=False):
         form.instance.depart_id = 1  # 如果页面不想显示部门，可以在form表单保存之前，先给depart_id一个默认值

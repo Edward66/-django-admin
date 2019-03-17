@@ -94,12 +94,29 @@ class StarkHandler:
     model_form_class = None
     order_list = []
     search_list = []
+    action_list = []
 
     def __init__(self, site, model_class, prev):
         self.site = site
         self.model_class = model_class
         self.prev = prev
         self.request = None
+
+    def get_action_list(self):
+        return self.action_list
+
+    def action_multi_delete(self, request, *args, **kwargs):
+        """
+        批量删除（如果想要定制执行成功后的返回值，那么久为action函数设置返回值）
+        :param request:
+        :return:
+        """
+        pk_list = request.POST.getlist('pk')  # checkbox的name都叫pk
+        self.model_class.objects.filter(id__in=pk_list).delete()
+
+        return redirect('https://www.baidu.com')
+
+    action_multi_delete.text = '批量删除'
 
     def get_search_list(self):
         return self.search_list
@@ -123,6 +140,15 @@ class StarkHandler:
 
         return DynamicModelForm
 
+    def save(self, form, is_update=False):
+        """
+        在使用ModelForm保存数据之前预留的钩子方法
+        :param form:
+        :param is_update:
+        :return:
+        """
+        form.save()
+
     def display_checkbox(self, obj=None, is_header=None):
         """
         自定义显示的列
@@ -132,7 +158,7 @@ class StarkHandler:
         """
         if is_header:
             return '选择'
-        return mark_safe('<input type="checkbox" name="pk" values="%s"/>' % obj.pk)
+        return mark_safe('<input type="checkbox" name="pk" value="%s"/>' % obj.pk)
 
     def display_edit(self, obj=None, is_header=None):
         """
@@ -160,12 +186,28 @@ class StarkHandler:
 
         return values
 
-    def list_view(self, request):
+    def list_view(self, request, *args, **kwargs):
         """
         列表页面
         :param request:
         :return:
         """
+
+        # 1. 处理action
+        action_list = self.get_action_list()
+        action_dict = {func.__name__: func.text for func in action_list}
+        # 往模板传函数，模板会自动执行,所以要用这个方式，而且后台也需要获取函数名，然后通过反射执行这个函数。
+        # {'multi_delete':'批量删除', 'multi_init':'批量初始化'}
+
+        if request.method == 'POST':
+            action_func_name = request.POST.get('action')
+            # 不能为空（用户必须选择了复选框），而且函数名必须在定义的字典里，防止用户在前端传入其他函数名对网站造成破坏。
+            if action_func_name and action_func_name in action_dict:
+                action_response = getattr(self, action_func_name)(request, *args, **kwargs)
+                if action_response:  # 如果有返回值就返回返回值，不往下走了。 例如： redirect('https://www.taobao.com)
+                    return action_response
+
+                    # 2. 处理搜索
 
         search_list = self.get_search_list()
         search_value = request.GET.get('q', '')
@@ -175,12 +217,12 @@ class StarkHandler:
             for item in search_list:
                 conn.children.append((item, search_value))
 
-        # 1. 获取排序
+        # 3. 获取排序
 
         order_list = self.get_order_list()
         queryset = self.model_class.objects.filter(conn).order_by(*order_list)
 
-        # 2.处理分页
+        # 4.处理分页
         all_count = queryset.count()
         query_params = request.GET.copy()  # page=1&level=2
         # query_params._mutable = True  # 把_mutable变成True，才可以被修改page
@@ -197,7 +239,7 @@ class StarkHandler:
 
         list_display = self.get_list_display()
 
-        # 3. 处理表格的表头
+        # 5. 处理表格的表头
         # 访问http://127.0.0.1:8000/stark/app01/userinfo/list
         # 页面上要显示的列，示例：['name', 'age', 'email']
 
@@ -213,7 +255,7 @@ class StarkHandler:
         else:
             header_list.append(self.model_class._meta.model_name)  # 没有定义list_display，让表头显示表名称
 
-        # 4. 处理表的内容 ['name','age']
+        # 6. 处理表的内容 ['name','age']
 
         body_list = []
         for queryset_obj in data_list:
@@ -229,7 +271,7 @@ class StarkHandler:
                 tr_list.append(queryset_obj)
             body_list.append(tr_list)
 
-        # 5.处理添加按钮
+        # 7.处理添加按钮
         add_btn = self.get_add_btn()
 
         context = {
@@ -240,20 +282,12 @@ class StarkHandler:
             'add_btn': add_btn,
             'search_list': search_list,
             'search_value': search_value,
+            'action_dict': action_dict,
         }
 
         return render(request, 'stark/data_list.html', context)
 
-    def save(self, form, is_update=False):
-        """
-        在使用ModelForm保存数据之前预留的钩子方法
-        :param form:
-        :param is_update:
-        :return:
-        """
-        form.save()
-
-    def add_view(self, request):
+    def add_view(self, request, *args, **kwargs):
         """
         添加页面
         :param request:
@@ -273,7 +307,7 @@ class StarkHandler:
 
         return render(request, 'stark/change.html', {'form': form})
 
-    def edit_view(self, request, pk):
+    def edit_view(self, request, pk, *args, **kwargs):
         """
         编辑页面
         :param request:
@@ -295,7 +329,7 @@ class StarkHandler:
             return redirect(self.reverse_list_url())
         return render(request, 'stark/change.html', {'form': form})
 
-    def delete_view(self, request, pk):
+    def delete_view(self, request, pk, *args, **kwargs):
         """
         删除页面
         :param request:
