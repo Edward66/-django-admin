@@ -53,8 +53,8 @@ class UserInfoHandler(StarkHandler):
 
     # 以后尽量把数据封装到类中
     search_group = [
-        Option('gender'),
-        Option('depart', {'id__gt': 2}),
+        Option('gender', text_func=lambda field_object: field_object[1] + '666'),
+        Option('depart', {'id__gt': 0}, text_func=lambda field_object: field_object.title),
     ]
 
     def save(self, form, is_update=False):

@@ -37,18 +37,45 @@ def get_choice_text(title, field):
     return wrapper
 
 
+class SearchGroupRow(object):
+    def __init__(self, title, queryset_or_tuple, option):  # option是类Option的对象
+        """
+        :param title: 组合搜索的列名称
+        :param queryset_or_tuple: 组合搜索关联获取到的数据
+        :param option: 配置
+        """
+
+        self.title = title
+        self.queryset_or_tuple = queryset_or_tuple
+        self.option = option
+
+    def __iter__(self):
+        yield '<div class="whole">'
+        yield self.title + ' :'
+        yield '</div>'
+        yield '<div class="others">'
+        yield '<a href="#">全部</a>'
+        for item in self.queryset_or_tuple:
+            text = self.option.get_text(item)
+            yield '<a href="#">%s</a>' % text
+        yield '</div>'
+
+
 class Option(object):
-    def __init__(self, field, db_condition=None):
+    def __init__(self, field, db_condition=None, text_func=None):
         """
 
         :param field: 组合搜索关联的字段
         :param db_condition: 数据库关联查询时的条件
+        :param text_func: 此函数用于显示组合搜索按钮页面文本，用户没写就是None，写了就用用户的值
         """
 
         self.field = field
         if not db_condition:
             db_condition = {}
         self.db_condition = db_condition
+        self.text_func = text_func
+        self.is_choice = False
 
     def get_db_condition(self, request, *args, **kwargs):  # 为了日后扩展
         return self.db_condition
@@ -58,22 +85,35 @@ class Option(object):
         根据字段获取关联数据
         :return:
         """
-
         # 根据gender或depart字符串，去自己对应的Model类中找到字段对象
         field_obj = model_class._meta.get_field(self.field)
+        title = field_obj.verbose_name
 
         # 获取关联数据
         if isinstance(field_obj, ForeignKey) or isinstance(field_obj, ManyToManyField):
-            # FK和M2M，应该获取其关联的表中的数据
+            # FK和M2M，应该获取其关联的表中的数据:QuerySet
             db_condition = self.get_db_condition(request, *args, **kwargs)
-            print(self.field, field_obj.related_model.objects.filter(**db_condition))
+            return SearchGroupRow(title, field_obj.related_model.objects.filter(**db_condition), self)  # option对象
 
             # print(field, field_obj.related_model) # django2.x用这个
             # print(field,field_obj.rel.model)  # django 1.x用这个
 
         else:
-            # 获取choice中的数据
-            print(self.field, field_obj.choices)
+            # 获取choice中的数据：元组
+            self.is_choice = True
+            return SearchGroupRow(title, field_obj.choices, self)  # option对象
+
+    def get_text(self, field_object):
+        """
+        获取文本的函数
+        :param field_object:
+        :return:
+        """
+        if self.text_func:  # 如果定义了，就用定义的
+            return self.text_func(field_object)
+        if self.is_choice:  # 如果没有定义，就用默认写的值
+            return field_object[1]  # 元组：显示第二个元素
+        return str(field_object)  # 对象：显示str
 
 
 class StarkSite:
@@ -321,8 +361,10 @@ class StarkHandler:
 
         # 8. 处理组合搜索
         search_group = self.get_search_group()  # ['gender','depart']
+        search_group_row_list = []
         for option_object in search_group:
-            option_object.get_queryset_or_tuple(self.model_class, request, *args, **kwargs)
+            row = option_object.get_queryset_or_tuple(self.model_class, request, *args, **kwargs)
+            search_group_row_list.append(row)
             # 传request,*args,**kwargs是为了处理用户通过url传过来的参数
         context = {
             'data_list': data_list,
@@ -334,6 +376,7 @@ class StarkHandler:
             'search_value': search_value,
             'action_dict': action_dict,
             'search_group': search_group,
+            'search_group_row_list': search_group_row_list,
         }
 
         return render(request, 'stark/data_list.html', context)
