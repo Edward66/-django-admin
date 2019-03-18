@@ -1,9 +1,15 @@
 from django.shortcuts import redirect
 
 from stark.service.version1 import site
-from stark.service.version1 import StarkHandler, get_choice_text, StarkModelForm
+from stark.service.version1 import StarkHandler, get_choice_text, StarkModelForm, Option
 
 from app01 import models
+
+
+class MyOption(Option):
+    def get_db_condition(self, request, *args, **kwargs):
+        return {}
+        # return {'id__gt': request.GET.get('nid')}
 
 
 class UserInfoModelForm(StarkModelForm):
@@ -45,7 +51,11 @@ class UserInfoHandler(StarkHandler):
 
     action_list = [StarkHandler.action_multi_delete, ]
 
-    search_group = ['gender', 'depart']
+    # 以后尽量把数据封装到类中
+    search_group = [
+        Option('gender'),
+        Option('depart', {'id__gt': 2}),
+    ]
 
     def save(self, form, is_update=False):
         form.instance.depart_id = 1  # 如果页面不想显示部门，可以在form表单保存之前，先给depart_id一个默认值

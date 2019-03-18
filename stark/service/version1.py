@@ -3,6 +3,7 @@ from types import FunctionType
 
 from django import forms
 from django.db.models import Q
+from django.db.models import ForeignKey, ManyToManyField
 from django.http import QueryDict
 from django.urls import re_path
 from django.urls import reverse
@@ -34,6 +35,45 @@ def get_choice_text(title, field):
         return getattr(obj, method)()
 
     return wrapper
+
+
+class Option(object):
+    def __init__(self, field, db_condition=None):
+        """
+
+        :param field: 组合搜索关联的字段
+        :param db_condition: 数据库关联查询时的条件
+        """
+
+        self.field = field
+        if not db_condition:
+            db_condition = {}
+        self.db_condition = db_condition
+
+    def get_db_condition(self, request, *args, **kwargs):  # 为了日后扩展
+        return self.db_condition
+
+    def get_queryset_or_tuple(self, model_class, request, *args, **kwargs):
+        """
+        根据字段获取关联数据
+        :return:
+        """
+
+        # 根据gender或depart字符串，去自己对应的Model类中找到字段对象
+        field_obj = model_class._meta.get_field(self.field)
+
+        # 获取关联数据
+        if isinstance(field_obj, ForeignKey) or isinstance(field_obj, ManyToManyField):
+            # FK和M2M，应该获取其关联的表中的数据
+            db_condition = self.get_db_condition(request, *args, **kwargs)
+            print(self.field, field_obj.related_model.objects.filter(**db_condition))
+
+            # print(field, field_obj.related_model) # django2.x用这个
+            # print(field,field_obj.rel.model)  # django 1.x用这个
+
+        else:
+            # 获取choice中的数据
+            print(self.field, field_obj.choices)
 
 
 class StarkSite:
@@ -280,24 +320,10 @@ class StarkHandler:
         add_btn = self.get_add_btn()
 
         # 8. 处理组合搜索
-        from django.db.models import ForeignKey, ManyToManyField
         search_group = self.get_search_group()  # ['gender','depart']
-        for field in search_group:
-            # 根据gender或depart字符串，去自己对应的Model类中找到字段对象
-            field_obj = self.model_class._meta.get_field(field)
-
-            # 获取关联数据
-            if isinstance(field_obj, ForeignKey) or isinstance(field_obj, ManyToManyField):
-                # FK和M2M，应该获取其关联的表中的数据
-                print(field, field_obj.related_model.objects.all())
-
-                # print(field, field_obj.related_model) # django2.x用这个
-                # print(field,field_obj.rel.model)  # django 1.x用这个
-
-            else:
-                # 获取choice中的数据
-                print(field, field_obj.choices)
-
+        for option_object in search_group:
+            option_object.get_queryset_or_tuple(self.model_class, request, *args, **kwargs)
+            # 传request,*args,**kwargs是为了处理用户通过url传过来的参数
         context = {
             'data_list': data_list,
             'header_list': header_list,
