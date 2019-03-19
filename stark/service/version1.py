@@ -38,43 +38,98 @@ def get_choice_text(title, field):
 
 
 class SearchGroupRow(object):
-    def __init__(self, title, queryset_or_tuple, option):  # option是类Option的对象
+    def __init__(self, title, queryset_or_tuple, option, query_dict):  # option是类Option的对象
         """
         :param title: 组合搜索的列名称
         :param queryset_or_tuple: 组合搜索关联获取到的数据
         :param option: 配置
+        :param query_dict: request.GET
         """
 
         self.title = title
         self.queryset_or_tuple = queryset_or_tuple
         self.option = option
+        self.query_dict = query_dict
 
     def __iter__(self):
         yield '<div class="whole">'
         yield self.title + ' :'
         yield '</div>'
         yield '<div class="others">'
-        yield '<a href="#">全部</a>'
+        total_query_dict = self.query_dict.copy()
+        total_query_dict._mutable = True
+        original_value = self.query_dict.getlist(self.option.field)
+        if not original_value:
+            # 下面是选中了全部
+            # 选中的全部的url链接就是当前参数。举例：没有传递gender，当前url是?depart=1，那gender栏的全部链接就是?depart=1。
+            yield '<a href="?%s" class="active">全部</a>' % total_query_dict.urlencode()
+        else:
+            total_query_dict.pop(self.option.field)
+            # 下面是没有选中全部
+            # 如果有参数，那么就把这个参数剔除掉。比如，选中了gender，就把gender剔除。如果没选部门，那么gender对应的全部的url就是?。 ?gender=1去掉后只剩?
+            # 如果选部门了，也选了gender，那gender中的全部，对应的url就是部门的url。 gender=1&depart=1。 去掉后只剩depart=1
+            # print('------>', total_query_dict)
+            yield '<a href="?%s">全部</a>' % total_query_dict.urlencode()
+
         for item in self.queryset_or_tuple:
             text = self.option.get_text(item)
-            yield '<a href="#">%s</a>' % text
+            value = str(self.option.get_value(item))
+            # 需要request.GET
+            # 获取组合搜搜按钮文本背后对应的值
+            # QueryDict = {gender:['2',],depart:['2',]}
+            query_dict = self.query_dict.copy()  # 深拷贝，因为我们要修改request.GET的值，如果修改了被人在获取的时候就不准备了，所以要copy一份
+            query_dict._mutable = True  # query_dict默认是不允许被修改的，如果设置成True就允许被修改了
+
+            if not self.option.is_multi:
+                # 必须写在query_dict[self.option.field]前面，否则获得的就是uery_dict[self.option.field]赋值后的值，而不是从get请求获得的
+                query_dict[self.option.field] = value  # 这样就可以循环获取choice或queryset里的所有value了。否则只能得到gender:1，depart2
+                # 从数据库取的value(如：1）和从get请求（如：?gender=1）的value值相等的话，那么就给它一个active的class
+                if str(value) in original_value:  # value是数字类型，original_value_list里面是字符串类型
+                    query_dict.pop(self.option.field)
+                    # 比如说用户选的男也就是gender=1，这样就会把数据库gender的值和用户选中的gender的值一样的去掉。
+                    # url就会变成这样：<a class="active" href="?">男</a>，url有了样式，不过href就一个问号
+                    # 当再次点击的时候，就等于发送了一个带问号的get请求,那么就不会触发这条分支，页面也就不会显示被选中的url了
+                    yield '<a class="active" href="?%s">%s</a>' % (query_dict.urlencode(), text)
+                else:
+                    # 没有循环到depart的时候就是<QueryDict: {'gender': ['2'],>。
+                    # 如果循环到depart，那么就会成为<QueryDict: {'gender': ['2'], 'depart': [1]}>。
+                    # 新的depart会把旧的覆盖掉就会成为:<QueryDict: {'gender': ['2'], 'depart': [2]}>
+                    # urlencode()可以生成这样的地址：gender=1&depart=2
+                    yield '<a href="?%s">%s</a>' % (query_dict.urlencode(), text)
+            else:
+                # {'gender':[1,]}
+                multi_value_list = query_dict.getlist(self.option.field)
+                print(multi_value_list)
+                if value in multi_value_list:
+                    multi_value_list.remove(value)
+                    query_dict.setlist(self.option.field, multi_value_list)
+                    yield '<a class="active" href="?%s">%s</a>' % (query_dict.urlencode(), text)
+                else:
+                    multi_value_list.append(value)
+                    query_dict.setlist(self.option.field, multi_value_list)
+                    yield '<a href="?%s">%s</a>' % (query_dict.urlencode(), text)
+
         yield '</div>'
 
 
 class Option(object):
-    def __init__(self, field, db_condition=None, text_func=None):
+    def __init__(self, field, is_multi=False, db_condition=None, text_func=None, value_func=None):
         """
 
         :param field: 组合搜索关联的字段
+        :param is_multi: 是否支持多选
         :param db_condition: 数据库关联查询时的条件
-        :param text_func: 此函数用于显示组合搜索按钮页面文本，用户没写就是None，写了就用用户的值
+        :param text_func: 此函数用于显示组合搜索按钮页面文本
+        :param value_func: 此函数用于显示组合搜索按钮的值
         """
 
         self.field = field
+        self.is_multi = is_multi
         if not db_condition:
             db_condition = {}
         self.db_condition = db_condition
         self.text_func = text_func
+        self.value_func = value_func
         self.is_choice = False
 
     def get_db_condition(self, request, *args, **kwargs):  # 为了日后扩展
@@ -93,7 +148,8 @@ class Option(object):
         if isinstance(field_obj, ForeignKey) or isinstance(field_obj, ManyToManyField):
             # FK和M2M，应该获取其关联的表中的数据:QuerySet
             db_condition = self.get_db_condition(request, *args, **kwargs)
-            return SearchGroupRow(title, field_obj.related_model.objects.filter(**db_condition), self)  # option对象
+            return SearchGroupRow(title, field_obj.related_model.objects.filter(**db_condition), self,
+                                  request.GET)  # option对象
 
             # print(field, field_obj.related_model) # django2.x用这个
             # print(field,field_obj.rel.model)  # django 1.x用这个
@@ -101,7 +157,7 @@ class Option(object):
         else:
             # 获取choice中的数据：元组
             self.is_choice = True
-            return SearchGroupRow(title, field_obj.choices, self)  # option对象
+            return SearchGroupRow(title, field_obj.choices, self, request.GET)  # option对象
 
     def get_text(self, field_object):
         """
@@ -114,6 +170,13 @@ class Option(object):
         if self.is_choice:  # 如果没有定义，就用默认写的值
             return field_object[1]  # 元组：显示第二个元素
         return str(field_object)  # 对象：显示str
+
+    def get_value(self, field_object):
+        if self.value_func:
+            return self.text_func(field_object)
+        if self.is_choice:
+            return field_object[0]
+        return field_object.pk
 
 
 class StarkSite:
@@ -186,6 +249,26 @@ class StarkHandler:
 
     def get_search_group(self):
         return self.search_group
+
+    def get_search_group_condition(self, request):
+        """
+        获取组合搜索的条件
+        :param request:
+        :return:
+        """
+        condition = {}
+        for option in self.search_group:
+            if option.is_multi:
+                values_list = request.GET.getlist(option.field)  # 用list是为了支持多选
+                if not values_list:
+                    continue
+                condition['%s__in' % option.field] = values_list  # {'gender__in': ['1'], 'depart__in': ['2']}
+            else:
+                values = request.GET.get(option.field)
+                if not values:
+                    continue
+                condition[option.field] = values
+        return condition
 
     def get_action_list(self):
         return self.action_list
@@ -305,7 +388,10 @@ class StarkHandler:
         # 3. 获取排序
 
         order_list = self.get_order_list()
-        queryset = self.model_class.objects.filter(conn).order_by(*order_list)
+        # 获取组合搜索的条件
+        search_group_condition = self.get_search_group_condition(request)
+        print(search_group_condition)
+        queryset = self.model_class.objects.filter(conn).filter(**search_group_condition).order_by(*order_list)
 
         # 4.处理分页
         all_count = queryset.count()

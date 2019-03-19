@@ -42,7 +42,7 @@ class UserInfoHandler(StarkHandler):
 
     has_add_btn = True
 
-    model_form_class = UserInfoModelForm
+    # model_form_class = UserInfoModelForm
 
     order_list = ['id']
 
@@ -53,13 +53,13 @@ class UserInfoHandler(StarkHandler):
 
     # 以后尽量把数据封装到类中
     search_group = [
-        Option('gender', text_func=lambda field_object: field_object[1] + '666'),
-        Option('depart', {'id__gt': 0}, text_func=lambda field_object: field_object.title),
+        Option('gender', is_multi=True),
+        Option('depart', is_multi=True),
     ]
 
-    def save(self, form, is_update=False):
-        form.instance.depart_id = 1  # 如果页面不想显示部门，可以在form表单保存之前，先给depart_id一个默认值
-        form.save()
+    # def save(self, form, is_update=False):
+    #     form.instance.depart_id = 1  # 如果页面不想显示部门，可以在form表单保存之前，先给depart_id一个默认值
+    #     form.save()
 
 
 site.register(models.Department, DeaprtmentHandler)
